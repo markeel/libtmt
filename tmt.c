@@ -59,6 +59,8 @@ struct TMT{
     TMTSCREEN screen;
     TMTLINE *tabs;
 
+	TMTSCREEN scroll;
+
     TMTCALLBACK cb;
     void *p;
     const wchar_t *acschars;
@@ -117,6 +119,16 @@ clearlines(TMT *vt, size_t r, size_t n)
 }
 
 static void
+savescroll(TMT *vt, TMTLINE **lines, size_t n) 
+{
+	for (int i=0; i<n; i++) {
+		vt->scroll.lines[i]->dirty = true;
+		memcpy(vt->scroll.lines[i]->chars, lines[i]->chars, vt->screen.ncol * sizeof(TMTCHAR));
+	}
+	CB(vt, TMT_MSG_SCROLL, &vt->scroll);
+}
+
+static void
 scrup(TMT *vt, size_t r, size_t n)
 {
     n = MIN(n, vt->screen.nline - 1 - r);
@@ -130,6 +142,9 @@ scrup(TMT *vt, size_t r, size_t n)
         memcpy(vt->screen.lines + (vt->screen.nline - n),
                buf, n * sizeof(TMTLINE *));
 
+		if (r == 0) {
+			savescroll(vt, buf, n);
+		}
         clearlines(vt, vt->screen.nline - n, n);
         dirtylines(vt, r, vt->screen.nline);
     }
@@ -161,7 +176,9 @@ HANDLER(ed)
     switch (P0(0)){
         case 0: b = c->r + 1; clearline(vt, l, c->c, vt->screen.ncol); break;
         case 1: e = c->r - 1; clearline(vt, l, 0, c->c);               break;
-        case 2:  /* use defaults */                                    break;
+        case 2:  
+			savescroll(vt, vt->screen.lines, vt->screen.nline);
+			break;
         default: /* do nothing   */                                    return;
     }
 
@@ -315,10 +332,12 @@ handlechar(TMT *vt, char i)
 }
 
 static void
+//notify(TMT *vt, bool update, bool moved, bool scroll)
 notify(TMT *vt, bool update, bool moved)
 {
     if (update) CB(vt, TMT_MSG_UPDATE, &vt->screen);
     if (moved) CB(vt, TMT_MSG_MOVED, &vt->curs);
+	//if (scroll) CB(vt, TMT_MSG_SCROLL, &vt->scroll);
 }
 
 static TMTLINE *
@@ -339,6 +358,12 @@ freelines(TMT *vt, size_t s, size_t n, bool screen)
         vt->screen.lines[i] = NULL;
     }
     if (screen) free(vt->screen.lines);
+
+    for (size_t i = s; vt->scroll.lines && i < s + n; i++){
+        free(vt->scroll.lines[i]);
+        vt->scroll.lines[i] = NULL;
+    }
+    if (screen) free(vt->scroll.lines);
 }
 
 TMT *
@@ -386,9 +411,28 @@ tmt_resize(TMT *vt, size_t nline, size_t ncol)
             nl = allocline(vt, vt->screen.lines[i], ncol, pc);
 
         if (!nl) return false;
+
         vt->screen.lines[i] = nl;
     }
     vt->screen.nline = nline;
+
+    TMTLINE **sl = realloc(vt->scroll.lines, nline * sizeof(TMTLINE *));
+    if (!sl) return false;
+
+    vt->scroll.lines = sl;
+    vt->scroll.ncol = ncol;
+    for (size_t i = 0; i < nline; i++){
+        TMTLINE *nl = NULL;
+        if (i >= vt->scroll.nline)
+            nl = vt->scroll.lines[i] = allocline(vt, NULL, ncol, 0);
+        else
+            nl = allocline(vt, vt->scroll.lines[i], ncol, pc);
+
+        if (!nl) return false;
+		nl->dirty = false;
+        vt->scroll.lines[i] = nl;
+    }
+    vt->scroll.nline = nline;
 
     vt->tabs = allocline(vt, vt->tabs, ncol, 0);
     if (!vt->tabs) return free(l), false;
@@ -398,6 +442,7 @@ tmt_resize(TMT *vt, size_t nline, size_t ncol)
 
     fixcursor(vt);
     dirtylines(vt, 0, nline);
+    //notify(vt, true, true, false);
     notify(vt, true, true);
     return true;
 }
@@ -470,6 +515,7 @@ tmt_write(TMT *vt, const char *s, size_t n)
         }
     }
 
+    //notify(vt, vt->dirty, memcmp(&oc, &vt->curs, sizeof(oc)) != 0, (vt->scroll.lines[0]->dirty));
     notify(vt, vt->dirty, memcmp(&oc, &vt->curs, sizeof(oc)) != 0);
 }
 
@@ -493,6 +539,13 @@ tmt_clean(TMT *vt)
 }
 
 void
+tmt_clean_scroll(TMT *vt)
+{
+    for (size_t i = 0; i < vt->scroll.nline; i++)
+        vt->scroll.lines[i]->dirty = false;
+}
+
+void
 tmt_reset(TMT *vt)
 {
     vt->curs.r = vt->curs.c = vt->oldcurs.r = vt->oldcurs.c = vt->acs = (bool)0;
@@ -501,5 +554,6 @@ tmt_reset(TMT *vt)
     memset(&vt->ms, 0, sizeof(vt->ms));
     clearlines(vt, 0, vt->screen.nline);
     CB(vt, TMT_MSG_CURSOR, "t");
+    //notify(vt, true, true, false);
     notify(vt, true, true);
 }

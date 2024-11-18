@@ -121,7 +121,8 @@ typedef enum{
     TMT_MSG_UPDATE,
     TMT_MSG_ANSWER,
     TMT_MSG_BELL,
-    TMT_MSG_CURSOR
+    TMT_MSG_CURSOR,
+    TMT_MSG_SCROLL
 } tmt_msg_t;
 
 typedef void (*TMTCALLBACK)(tmt_msg_t m, struct TMT *v, const void *r, void *p);
@@ -135,6 +136,7 @@ void tmt_write(TMT *vt, const char *s, size_t n);
 const TMTSCREEN *tmt_screen(const TMT *vt);
 const TMTPOINT *tmt_cursor(const TMT *vt);
 void tmt_clean(TMT *vt);
+void tmt_clean_scroll(TMT *vt);
 void tmt_reset(TMT *vt);
 
 #endif
