@@ -74,7 +74,23 @@ typedef enum{
     TMT_COLOR_MAGENTA,
     TMT_COLOR_CYAN,
     TMT_COLOR_WHITE,
+    TMT_COLOR_BRIGHT_BLACK,
+    TMT_COLOR_BRIGHT_RED,
+    TMT_COLOR_BRIGHT_GREEN,
+    TMT_COLOR_BRIGHT_YELLOW,
+    TMT_COLOR_BRIGHT_BLUE,
+    TMT_COLOR_BRIGHT_MAGENTA,
+    TMT_COLOR_BRIGHT_CYAN,
+    TMT_COLOR_BRIGHT_WHITE,
+    TMT_COLOR_RGB,
     TMT_COLOR_MAX
+} tmt_color_code_t;
+
+typedef struct {
+	tmt_color_code_t code;
+	unsigned char red;
+	unsigned char green;
+	unsigned char blue;
 } tmt_color_t;
 
 typedef struct TMTATTRS TMTATTRS;
