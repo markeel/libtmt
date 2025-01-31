@@ -51,6 +51,10 @@
 
 #define HANDLER(name) static void name (TMT *vt) { COMMON_VARS; 
 
+#ifdef FORCE_UTF8
+#include "u8mbtowc.h"
+#endif
+
 struct TMT{
     TMTPOINT curs, oldcurs;
     TMTATTRS attrs, oldattrs;
@@ -61,9 +65,13 @@ struct TMT{
 
     TMTCALLBACK cb;
     void *p;
-    const wchar_t *acschars;
+    const tmt_wchar_t *acschars;
 
+#ifdef FORCE_UTF8
+	struct utf8_state us;
+#else
     mbstate_t ms;
+#endif
     size_t nmb;
     char mb[BUF_MAX + 1];
 
@@ -74,9 +82,9 @@ struct TMT{
 };
 
 static TMTATTRS defattrs = {.fg = TMT_COLOR_DEFAULT, .bg = TMT_COLOR_DEFAULT};
-static void writecharatcurs(TMT *vt, wchar_t w);
+static void writecharatcurs(TMT *vt, tmt_wchar_t w);
 
-static wchar_t
+static tmt_wchar_t
 tacs(const TMT *vt, unsigned char c)
 {
     /* The terminfo alternate character set for ANSI. */
@@ -88,7 +96,7 @@ tacs(const TMT *vt, unsigned char c)
                                   0376U};
     for (size_t i = 0; i < sizeof(map); i++) if (map[i] == c)
         return vt->acschars[i];
-    return (wchar_t)c;
+    return (tmt_wchar_t)c;
 }
 
 static void
@@ -226,7 +234,7 @@ HANDLER(sgr)
 
 HANDLER(rep)
     if (!c->c) return;
-    wchar_t r = l->chars[c->c - 1].c;
+    tmt_wchar_t r = l->chars[c->c - 1].c;
     for (size_t i = 0; i < P1(0); i++)
         writecharatcurs(vt, r);
 }
@@ -343,13 +351,13 @@ freelines(TMT *vt, size_t s, size_t n, bool screen)
 
 TMT *
 tmt_open(size_t nline, size_t ncol, TMTCALLBACK cb, void *p,
-         const wchar_t *acs)
+         const tmt_wchar_t *acs)
 {
     TMT *vt = calloc(1, sizeof(TMT));
     if (!nline || !ncol || !vt) return free(vt), NULL;
 
     /* ASCII-safe defaults for box-drawing characters. */
-    vt->acschars = acs? acs : L"><^v#+:o##+++++~---_++++|<>*!fo";
+    vt->acschars = acs? acs : U"><^v#+:o##+++++~---_++++|<>*!fo";
     vt->cb = cb;
     vt->p = p;
 
@@ -403,12 +411,12 @@ tmt_resize(TMT *vt, size_t nline, size_t ncol)
 }
 
 static void
-writecharatcurs(TMT *vt, wchar_t w)
+writecharatcurs(TMT *vt, tmt_wchar_t w)
 {
     COMMON_VARS;
 
     #ifdef TMT_HAS_WCWIDTH
-    extern int wcwidth(wchar_t c);
+    extern int wcwidth(tmt_wchar_t c);
     if (wcwidth(w) > 1)  w = TMT_INVALID_CHAR;
     if (wcwidth(w) < 0) return;
     #endif
@@ -433,17 +441,28 @@ writecharatcurs(TMT *vt, wchar_t w)
 static inline size_t
 testmbchar(TMT *vt)
 {
+#ifdef FORCE_UTF8
+    struct utf8_state us = vt->us;
+	return vt->nmb ? utf8_to_wc(NULL, vt->mb, vt->nmb, &us) : UTF8_INCOMPLETE;
+#else
     mbstate_t ts = vt->ms;
     return vt->nmb? mbrtowc(NULL, vt->mb, vt->nmb, &ts) : (size_t)-2;
+#endif
 }
 
-static inline wchar_t
+static inline tmt_wchar_t
 getmbchar(TMT *vt)
 {
-    wchar_t c = 0;
+    tmt_wchar_t c = 0;
+#ifdef FORCE_UTF8
+	int cnt = utf8_to_wc(&c, vt->mb, vt->nmb, &vt->us);
+	vt->nmb = 0;
+	return (cnt < 0) ? TMT_INVALID_CHAR : c;
+#else
     size_t n = mbrtowc(&c, vt->mb, vt->nmb, &vt->ms);
     vt->nmb = 0;
     return (n == (size_t)-1 || n == (size_t)-2)? TMT_INVALID_CHAR : c;
+#endif
 }
 
 void
@@ -498,7 +517,11 @@ tmt_reset(TMT *vt)
     vt->curs.r = vt->curs.c = vt->oldcurs.r = vt->oldcurs.c = vt->acs = (bool)0;
     resetparser(vt);
     vt->attrs = vt->oldattrs = defattrs;
+#ifdef FORCE_UTF8
+    memset(&vt->us, 0, sizeof(vt->us));
+#else
     memset(&vt->ms, 0, sizeof(vt->ms));
+#endif
     clearlines(vt, 0, vt->screen.nline);
     CB(vt, TMT_MSG_CURSOR, "t");
     notify(vt, true, true);

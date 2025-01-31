@@ -30,11 +30,17 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#ifdef FORCE_UTF8
+#include <stdint.h>
+typedef uint32_t tmt_wchar_t;
+#else
 #include <wchar.h>
+typedef wchar_t tmt_wchar_t;
+#endif
 
 /**** INVALID WIDE CHARACTER */
 #ifndef TMT_INVALID_CHAR
-#define TMT_INVALID_CHAR ((wchar_t)0xfffd)
+#define TMT_INVALID_CHAR ((tmt_wchar_t)0xfffd)
 #endif
 
 /**** INPUT SEQUENCES */
@@ -91,7 +97,7 @@ struct TMTATTRS{
 
 typedef struct TMTCHAR TMTCHAR;
 struct TMTCHAR{
-    wchar_t c;
+    tmt_wchar_t c;
     TMTATTRS a;
 };
 
@@ -128,7 +134,7 @@ typedef void (*TMTCALLBACK)(tmt_msg_t m, struct TMT *v, const void *r, void *p);
 
 /**** PUBLIC FUNCTIONS */
 TMT *tmt_open(size_t nline, size_t ncol, TMTCALLBACK cb, void *p,
-              const wchar_t *acs);
+              const tmt_wchar_t *acs);
 void tmt_close(TMT *vt);
 bool tmt_resize(TMT *vt, size_t nline, size_t ncol);
 void tmt_write(TMT *vt, const char *s, size_t n);
