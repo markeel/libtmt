@@ -80,7 +80,23 @@ typedef enum{
     TMT_COLOR_MAGENTA,
     TMT_COLOR_CYAN,
     TMT_COLOR_WHITE,
+    TMT_COLOR_BRIGHT_BLACK,
+    TMT_COLOR_BRIGHT_RED,
+    TMT_COLOR_BRIGHT_GREEN,
+    TMT_COLOR_BRIGHT_YELLOW,
+    TMT_COLOR_BRIGHT_BLUE,
+    TMT_COLOR_BRIGHT_MAGENTA,
+    TMT_COLOR_BRIGHT_CYAN,
+    TMT_COLOR_BRIGHT_WHITE,
+    TMT_COLOR_RGB,
     TMT_COLOR_MAX
+} tmt_color_code_t;
+
+typedef struct {
+	tmt_color_code_t code;
+	unsigned char red;
+	unsigned char green;
+	unsigned char blue;
 } tmt_color_t;
 
 typedef struct TMTATTRS TMTATTRS;
@@ -127,7 +143,8 @@ typedef enum{
     TMT_MSG_UPDATE,
     TMT_MSG_ANSWER,
     TMT_MSG_BELL,
-    TMT_MSG_CURSOR
+    TMT_MSG_CURSOR,
+    TMT_MSG_SCROLL
 } tmt_msg_t;
 
 typedef void (*TMTCALLBACK)(tmt_msg_t m, struct TMT *v, const void *r, void *p);
@@ -141,6 +158,7 @@ void tmt_write(TMT *vt, const char *s, size_t n);
 const TMTSCREEN *tmt_screen(const TMT *vt);
 const TMTPOINT *tmt_cursor(const TMT *vt);
 void tmt_clean(TMT *vt);
+void tmt_clean_scroll(TMT *vt);
 void tmt_reset(TMT *vt);
 
 #endif
