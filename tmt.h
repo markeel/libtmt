@@ -30,11 +30,17 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#ifdef FORCE_UTF8
+#include <stdint.h>
+typedef uint32_t tmt_wchar_t;
+#else
 #include <wchar.h>
+typedef wchar_t tmt_wchar_t;
+#endif
 
 /**** INVALID WIDE CHARACTER */
 #ifndef TMT_INVALID_CHAR
-#define TMT_INVALID_CHAR ((wchar_t)0xfffd)
+#define TMT_INVALID_CHAR ((tmt_wchar_t)0xfffd)
 #endif
 
 /**** INPUT SEQUENCES */
@@ -74,7 +80,29 @@ typedef enum{
     TMT_COLOR_MAGENTA,
     TMT_COLOR_CYAN,
     TMT_COLOR_WHITE,
+    TMT_COLOR_BRIGHT_BLACK,
+    TMT_COLOR_BRIGHT_RED,
+    TMT_COLOR_BRIGHT_GREEN,
+    TMT_COLOR_BRIGHT_YELLOW,
+    TMT_COLOR_BRIGHT_BLUE,
+    TMT_COLOR_BRIGHT_MAGENTA,
+    TMT_COLOR_BRIGHT_CYAN,
+    TMT_COLOR_BRIGHT_WHITE,
+    TMT_COLOR_RGB,
     TMT_COLOR_MAX
+} tmt_color_code_t;
+
+typedef enum {
+	TMT_IGNORED,
+	TMT_HALFWIDTH,
+	TMT_FULLWIDTH,
+} tmt_char_t;
+
+typedef struct {
+	tmt_color_code_t code;
+	unsigned char red;
+	unsigned char green;
+	unsigned char blue;
 } tmt_color_t;
 
 typedef struct TMTATTRS TMTATTRS;
@@ -91,8 +119,9 @@ struct TMTATTRS{
 
 typedef struct TMTCHAR TMTCHAR;
 struct TMTCHAR{
-    wchar_t c;
+    tmt_wchar_t c;
     TMTATTRS a;
+	tmt_char_t char_type;
 };
 
 typedef struct TMTPOINT TMTPOINT;
@@ -121,20 +150,22 @@ typedef enum{
     TMT_MSG_UPDATE,
     TMT_MSG_ANSWER,
     TMT_MSG_BELL,
-    TMT_MSG_CURSOR
+    TMT_MSG_CURSOR,
+    TMT_MSG_SCROLL
 } tmt_msg_t;
 
 typedef void (*TMTCALLBACK)(tmt_msg_t m, struct TMT *v, const void *r, void *p);
 
 /**** PUBLIC FUNCTIONS */
 TMT *tmt_open(size_t nline, size_t ncol, TMTCALLBACK cb, void *p,
-              const wchar_t *acs);
+              const tmt_wchar_t *acs);
 void tmt_close(TMT *vt);
 bool tmt_resize(TMT *vt, size_t nline, size_t ncol);
 void tmt_write(TMT *vt, const char *s, size_t n);
 const TMTSCREEN *tmt_screen(const TMT *vt);
 const TMTPOINT *tmt_cursor(const TMT *vt);
 void tmt_clean(TMT *vt);
+void tmt_clean_scroll(TMT *vt);
 void tmt_reset(TMT *vt);
 
 #endif
