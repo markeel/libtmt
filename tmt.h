@@ -92,6 +92,12 @@ typedef enum{
     TMT_COLOR_MAX
 } tmt_color_code_t;
 
+typedef enum {
+	TMT_IGNORED,
+	TMT_HALFWIDTH,
+	TMT_FULLWIDTH,
+} tmt_char_t;
+
 typedef struct {
 	tmt_color_code_t code;
 	unsigned char red;
@@ -115,6 +121,7 @@ typedef struct TMTCHAR TMTCHAR;
 struct TMTCHAR{
     tmt_wchar_t c;
     TMTATTRS a;
+	tmt_char_t char_type;
 };
 
 typedef struct TMTPOINT TMTPOINT;

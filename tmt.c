@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tmt.h"
+#include "wide_lookup.h"
 
 #define BUF_MAX 100
 #define PAR_MAX 8
@@ -116,6 +117,7 @@ clearline(TMT *vt, TMTLINE *l, size_t s, size_t e)
     for (size_t i = s; i < e && i < vt->screen.ncol; i++){
         l->chars[i].a = defattrs;
         l->chars[i].c = L' ';
+		l->chars[i].char_type = TMT_HALFWIDTH;
     }
 }
 
@@ -408,7 +410,11 @@ tmt_open(size_t nline, size_t ncol, TMTCALLBACK cb, void *p,
     if (!nline || !ncol || !vt) return free(vt), NULL;
 
     /* ASCII-safe defaults for box-drawing characters. */
+#ifdef FORCE_UTF8
     vt->acschars = acs? acs : U"><^v#+:o##+++++~---_++++|<>*!fo";
+#else
+    vt->acschars = acs? acs : L"><^v#+:o##+++++~---_++++|<>*!fo";
+#endif
     vt->cb = cb;
     vt->p = p;
 
@@ -492,8 +498,11 @@ writecharatcurs(TMT *vt, tmt_wchar_t w)
     if (wcwidth(w) < 0) return;
     #endif
 
+	bool full_width = is_wc_unicode_full_width(w, false);
+	int use_cols = full_width ? 2 : 1;
+
 	/* If at end of screen, wrap to next line */
-	if (c->c >= s->ncol) {
+	if (c->c+use_cols-1 >= s->ncol) {
 		c->c = 0;
 		c->r++;
 	}
@@ -504,11 +513,17 @@ writecharatcurs(TMT *vt, tmt_wchar_t w)
 
     CLINE(vt)->chars[vt->curs.c].c = w;
     CLINE(vt)->chars[vt->curs.c].a = vt->attrs;
+    CLINE(vt)->chars[vt->curs.c].char_type = full_width ? TMT_FULLWIDTH : TMT_HALFWIDTH;
+	if (full_width) {
+		CLINE(vt)->chars[vt->curs.c+1].c = L' ';
+		CLINE(vt)->chars[vt->curs.c+1].a = vt->attrs;
+		CLINE(vt)->chars[vt->curs.c+1].char_type = TMT_IGNORED;
+	}
     CLINE(vt)->dirty = vt->dirty = true;
 
 	/* Advance cursor to next column 
 	   Will wrap if necessary when trying to write next character. */
-	c->c++;
+	c->c += use_cols;
 
 }
 
@@ -563,7 +578,6 @@ tmt_write(TMT *vt, const char *s, size_t n)
         }
     }
 
-    //notify(vt, vt->dirty, memcmp(&oc, &vt->curs, sizeof(oc)) != 0, (vt->scroll.lines[0]->dirty));
     notify(vt, vt->dirty, memcmp(&oc, &vt->curs, sizeof(oc)) != 0);
 }
 

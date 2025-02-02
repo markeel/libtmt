@@ -45,6 +45,7 @@ utf8_to_wc(tmt_wchar_t * dest, const char * src, size_t src_len, struct utf8_sta
 					if (dest != NULL) {
 						*dest = cur;
 					}
+					state->pos = 0;
 					return src_idx;
 				}
 				if (cur < 0xc2) {
