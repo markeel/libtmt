@@ -38,6 +38,11 @@ typedef uint32_t tmt_wchar_t;
 typedef wchar_t tmt_wchar_t;
 #endif
 
+/**** Maximum number of combining marks for a character ****/
+#ifndef MAX_TMTCHAR_MARKS
+#define MAX_TMTCHAR_MARKS 16
+#endif
+
 /**** INVALID WIDE CHARACTER */
 #ifndef TMT_INVALID_CHAR
 #define TMT_INVALID_CHAR ((tmt_wchar_t)0xfffd)
@@ -96,6 +101,7 @@ typedef enum {
 	TMT_IGNORED,
 	TMT_HALFWIDTH,
 	TMT_FULLWIDTH,
+	TMT_FORMATTER,
 } tmt_char_t;
 
 typedef struct {
@@ -120,8 +126,10 @@ struct TMTATTRS{
 typedef struct TMTCHAR TMTCHAR;
 struct TMTCHAR{
     tmt_wchar_t c;
-    TMTATTRS a;
-	tmt_char_t char_type;
+    TMTATTRS    a;
+	tmt_char_t  char_type;
+	size_t      num_marks;
+	tmt_char_t  marks[MAX_TMTCHAR_MARKS];
 };
 
 typedef struct TMTPOINT TMTPOINT;

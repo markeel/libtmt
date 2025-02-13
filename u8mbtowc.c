@@ -4,25 +4,25 @@
 
 int
 wc_to_utf8(char * dest, size_t dest_len, tmt_wchar_t src) {
-	if (src < 0x7f) {
+	if (src <= 0x7f) {
 		if (dest_len > 0) {
 			dest[0] = src;
 			return 1;
 		}
-	} else if (src < 0x7ff) {
+	} else if (src <= 0x7ff) {
 		if (dest_len > 1) {
 			dest[0] = 0xc0 | ((src >> 6) & 0x1f);
 			dest[1] = 0x80 | (src & 0x3f);
 			return 2;
 		}
-	} else if (src < 0xffff) {
+	} else if (src <= 0xffff) {
 		if (dest_len > 2) {
 			dest[0] = 0xe0 | ((src >> 12) & 0x0f);
 			dest[1] = 0x80 | ((src >> 6) & 0x3f);
 			dest[2] = 0x80 | (src & 0x3f);
 			return 3;
 		}
-	} else if (src < 0x10ffff) {
+	} else if (src <= 0x10ffff) {
 		if (dest_len > 3) {
 			dest[0] = 0xf0 | ((src >> 18) & 0x07);
 			dest[1] = 0x80 | ((src >> 12) & 0x3f);

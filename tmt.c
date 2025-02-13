@@ -78,10 +78,11 @@ struct TMT{
     size_t nmb;
     char mb[BUF_MAX + 1];
 
+	size_t cursty;
     size_t pars[PAR_MAX];   
     size_t npar;
     size_t arg;
-    enum {S_NUL, S_ESC, S_ARG, S_OS} state;
+    enum {S_NUL, S_ESC, S_ARG, S_OS, S_SPA} state;
 };
 
 static TMTATTRS defattrs = {.fg = TMT_COLOR_DEFAULT, .bg = TMT_COLOR_DEFAULT};
@@ -118,6 +119,7 @@ clearline(TMT *vt, TMTLINE *l, size_t s, size_t e)
         l->chars[i].a = defattrs;
         l->chars[i].c = L' ';
 		l->chars[i].char_type = TMT_HALFWIDTH;
+		l->chars[i].num_marks = 0;
     }
 }
 
@@ -296,6 +298,10 @@ HANDLER(consumearg)
     vt->arg = 0;
 }
 
+HANDLER(setcursty)
+	vt->cursty = vt->pars[0];
+}
+
 HANDLER(fixcursor)
     c->r = MIN(c->r, s->nline - 1);
     c->c = MIN(c->c, s->ncol - 1);
@@ -329,6 +335,7 @@ handlechar(TMT *vt, char i)
     ON(S_OS,  "\x1b",       vt->state = S_ESC)
     ON(S_OS,  "\x07",       vt->state = S_NUL)
 	SK(S_OS)
+	DO(S_SPA, "q",          setcursty(vt))
     ON(S_ARG, "\x1b",       vt->state = S_ESC)
     ON(S_ARG, ";",          consumearg(vt))
     ON(S_ARG, "?",          (void)0)
@@ -362,6 +369,7 @@ handlechar(TMT *vt, char i)
     DO(S_ARG, "l",          if (P0(0) == 25) CB(vt, TMT_MSG_CURSOR, "f"))
     DO(S_ARG, "s",          vt->oldcurs = vt->curs; vt->oldattrs = vt->attrs)
     DO(S_ARG, "u",          vt->curs = vt->oldcurs; vt->attrs = vt->oldattrs)
+    ON(S_ARG, " ",          vt->state = S_SPA)
     DO(S_ARG, "@",          ich(vt))
 
     return resetparser(vt), false;
@@ -487,6 +495,59 @@ tmt_resize(TMT *vt, size_t nline, size_t ncol)
     return true;
 }
 
+#define ADD_MARK(w) { \
+	if (cur_char_type == TMT_IGNORED) { \
+		if (cur_col > 0) cur_col -= 1; \
+	} \
+	size_t *num_marks = &CLINE(vt)->chars[cur_col].num_marks;\
+	if (*num_marks < MAX_TMTCHAR_MARKS) { \
+		CLINE(vt)->chars[cur_col].marks[*num_marks] = w; \
+		*num_marks += 1; \
+	} \
+}
+
+#define UPDATE_FULLWIDTH() {\
+	TMTCHAR mc;	\
+	memcpy(&mc, &CLINE(vt)->chars[vt->curs.c], sizeof(TMTCHAR)); \
+	mc.char_type = TMT_FULLWIDTH; \
+	if (c->c+1 >= s->ncol) { \
+		CLINE(vt)->chars[vt->curs.c].c = L' '; \
+		CLINE(vt)->chars[vt->curs.c].a = vt->attrs; \
+		CLINE(vt)->chars[vt->curs.c].char_type = TMT_HALFWIDTH; \
+		CLINE(vt)->chars[vt->curs.c].num_marks = 0; \
+		CLINE(vt)->dirty = vt->dirty = true; \
+		c->c = 0; \
+		c->r++; \
+	} \
+	if (c->r >= s->nline){ \
+		c->r = s->nline - 1; \
+		scrup(vt, 0, 1); \
+	} \
+	memcpy(&CLINE(vt)->chars[vt->curs.c], &mc, sizeof(TMTCHAR)); \
+	CLINE(vt)->chars[vt->curs.c+1].c = L' '; \
+	CLINE(vt)->chars[vt->curs.c+1].a = vt->attrs; \
+	CLINE(vt)->chars[vt->curs.c+1].char_type = TMT_IGNORED; \
+	CLINE(vt)->chars[vt->curs.c+1].num_marks = 0; \
+	c->c += 2; \
+}
+
+#define MAKE_FULLWIDTH() {\
+	if (cur_char_type == TMT_HALFWIDTH) { \
+		UPDATE_FULLWIDTH(); \
+	} \
+}
+
+#define REPLACE_CHARTYPE() {\
+	if (new_char_type == TMT_FULLWIDTH) { \
+		UPDATE_FULLWIDTH(); \
+	} else { \
+		if (cur_char_type == TMT_IGNORED) { \
+			if (cur_col > 0) cur_col -= 1; \
+		} \
+		CLINE(vt)->chars[cur_col].char_type = new_char_type; \
+	} \
+}
+
 static void
 writecharatcurs(TMT *vt, tmt_wchar_t w)
 {
@@ -498,7 +559,39 @@ writecharatcurs(TMT *vt, tmt_wchar_t w)
     if (wcwidth(w) < 0) return;
     #endif
 
+	tmt_char_t cur_char_type = TMT_HALFWIDTH;
+	int cur_col = vt->curs.c;
+	if (vt->curs.c > 0) cur_col -= 1;
+	cur_char_type = CLINE(vt)->chars[cur_col].char_type;
 	bool full_width = is_wc_unicode_full_width(w, false);
+	tmt_char_t new_char_type = full_width ? TMT_FULLWIDTH : TMT_HALFWIDTH;
+	tmt_mark_t mark_type = get_wc_unicode_mark_type(w);
+	switch (mark_type) {
+		case TMT_NOT_MARK:
+			break;
+		case TMT_FORMAT:
+			new_char_type = TMT_FORMATTER;
+			break;
+		case TMT_MARK:
+			ADD_MARK(w);
+			CLINE(vt)->dirty = vt->dirty = true;
+			return;
+		case TMT_MARK_FULLWIDTH:
+		{
+			ADD_MARK(w);
+			MAKE_FULLWIDTH();
+			CLINE(vt)->dirty = vt->dirty = true;
+			return;
+		}
+	}
+
+	if (cur_char_type == TMT_FORMATTER) {
+		ADD_MARK(w);
+		REPLACE_CHARTYPE();
+		CLINE(vt)->dirty = vt->dirty = true;
+		return;
+	}
+
 	int use_cols = full_width ? 2 : 1;
 
 	/* If at end of screen, wrap to next line */
@@ -513,7 +606,7 @@ writecharatcurs(TMT *vt, tmt_wchar_t w)
 
     CLINE(vt)->chars[vt->curs.c].c = w;
     CLINE(vt)->chars[vt->curs.c].a = vt->attrs;
-    CLINE(vt)->chars[vt->curs.c].char_type = full_width ? TMT_FULLWIDTH : TMT_HALFWIDTH;
+    CLINE(vt)->chars[vt->curs.c].char_type = new_char_type;
 	if (full_width) {
 		CLINE(vt)->chars[vt->curs.c+1].c = L' ';
 		CLINE(vt)->chars[vt->curs.c+1].a = vt->attrs;
