@@ -78,10 +78,11 @@ struct TMT{
     size_t nmb;
     char mb[BUF_MAX + 1];
 
+	size_t cursty;
     size_t pars[PAR_MAX];   
     size_t npar;
     size_t arg;
-    enum {S_NUL, S_ESC, S_ARG, S_OS} state;
+    enum {S_NUL, S_ESC, S_ARG, S_OS, S_SPA} state;
 };
 
 static TMTATTRS defattrs = {.fg = TMT_COLOR_DEFAULT, .bg = TMT_COLOR_DEFAULT};
@@ -297,6 +298,10 @@ HANDLER(consumearg)
     vt->arg = 0;
 }
 
+HANDLER(setcursty)
+	vt->cursty = vt->pars[0];
+}
+
 HANDLER(fixcursor)
     c->r = MIN(c->r, s->nline - 1);
     c->c = MIN(c->c, s->ncol - 1);
@@ -330,6 +335,7 @@ handlechar(TMT *vt, char i)
     ON(S_OS,  "\x1b",       vt->state = S_ESC)
     ON(S_OS,  "\x07",       vt->state = S_NUL)
 	SK(S_OS)
+	DO(S_SPA, "q",          setcursty(vt))
     ON(S_ARG, "\x1b",       vt->state = S_ESC)
     ON(S_ARG, ";",          consumearg(vt))
     ON(S_ARG, "?",          (void)0)
@@ -363,6 +369,7 @@ handlechar(TMT *vt, char i)
     DO(S_ARG, "l",          if (P0(0) == 25) CB(vt, TMT_MSG_CURSOR, "f"))
     DO(S_ARG, "s",          vt->oldcurs = vt->curs; vt->oldattrs = vt->attrs)
     DO(S_ARG, "u",          vt->curs = vt->oldcurs; vt->attrs = vt->oldattrs)
+    ON(S_ARG, " ",          vt->state = S_SPA)
     DO(S_ARG, "@",          ich(vt))
 
     return resetparser(vt), false;
