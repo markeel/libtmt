@@ -235,9 +235,15 @@ HANDLER(el)
 HANDLER(sgr)
     #define FGBG(c) *(P0(i) < 40? &vt->attrs.fg.code : &vt->attrs.bg.code) = c
     #define FGBGB(c) *(P0(i) < 100? &vt->attrs.fg.code : &vt->attrs.bg.code) = c
-    #define FGBGRED() *(P0(i) < 40? &vt->attrs.fg.red : &vt->attrs.bg.red) = (i < vt->npar-2) ? vt->pars[i+2] : 0
-    #define FGBGGRN() *(P0(i) < 40? &vt->attrs.fg.green : &vt->attrs.bg.green) = (i < vt->npar-3) ? vt->pars[i+3] : 0 
-    #define FGBGBLU() *(P0(i) < 40? &vt->attrs.fg.blue : &vt->attrs.bg.blue) = (i < vt->npar-4) ? vt->pars[i+4] : 0
+    #define FGBRED(r) *(P0(i) < 40? &vt->attrs.fg.red : &vt->attrs.bg.red) = r 
+    #define FGBGRN(g) *(P0(i) < 40? &vt->attrs.fg.green : &vt->attrs.bg.green) = g
+    #define FGBBLU(b) *(P0(i) < 40? &vt->attrs.fg.blue : &vt->attrs.bg.blue) = b
+    #define FGBGRED() FGBRED((i < vt->npar-2) ? vt->pars[i+2] : 0)
+    #define FGBGGRN() FGBGRN((i < vt->npar-3) ? vt->pars[i+3] : 0)
+    #define FGBGBLU() FGBBLU((i < vt->npar-4) ? vt->pars[i+4] : 0)
+    #define FGBIRED(r) FGBRED((r > 0) ? 55 + r * 40 : 0)
+    #define FGBIGRN(g) FGBGRN((g > 0) ? 55 + g * 40 : 0)
+    #define FGBIBLU(b) FGBBLU((b > 0) ? 55 + b * 40 : 0)
     for (size_t i = 0; i < vt->npar; i++) switch (P0(i)){
         case  0: vt->attrs                    = defattrs;   break;
         case  1: case 22: vt->attrs.bold      = P0(0) < 20; break;
@@ -255,13 +261,38 @@ HANDLER(sgr)
         case 35: case 45: FGBG(TMT_COLOR_MAGENTA);          break;
         case 36: case 46: FGBG(TMT_COLOR_CYAN);             break;
         case 37: case 47: FGBG(TMT_COLOR_WHITE);            break;
-        case 38: case 48: if ((i < vt->npar-1) && (vt->pars[i+1] == 2)) {
-							  FGBG(TMT_COLOR_RGB);
-						 	  FGBGRED(); 
-							  FGBGGRN(); 
-							  FGBGBLU(); 
-						  }
-						  break;
+        case 38: case 48: if (i < vt->npar-1) { 
+                              FGBG(TMT_COLOR_RGB);
+                              switch (vt->pars[i+1]) {
+                                  case 2: {
+                                      FGBGRED(); 
+                                      FGBGGRN(); 
+                                      FGBGBLU(); 
+                                      break;
+                                  }
+                                  case 5: {
+                                      if (i < vt->npar-2) {
+                                          if (vt->pars[i+2] < 16) {
+                                              FGBG(TMT_COLOR_BLACK+vt->pars[i+2]);
+                                          } else if (vt->pars[i+2] < 232) {
+                                              int num = vt->pars[i+2] - 16;
+                                              int blu_idx = (num % 6);
+                                              FGBIRED(num / 36);
+                                              FGBIGRN((num % 36) / 6);
+                                              FGBIBLU(num % 6);
+                                          } else if (vt->pars[i+2] < 256) {
+                                              int num = vt->pars[i+2] - 232;
+                                              FGBRED(num * 10 + 8);
+                                              FGBGRN(num * 10 + 8);
+                                              FGBBLU(num * 10 + 8);
+                                          }
+                                      }
+                                      break;
+                                  }
+                              }
+                          }
+                          i = vt->npar;
+                          break;
         case 39: case 49: FGBG(TMT_COLOR_DEFAULT);          break;
         case 90: case 100: FGBGB(TMT_COLOR_BRIGHT_BLACK);   break;
         case 91: case 101: FGBGB(TMT_COLOR_BRIGHT_RED);     break;
@@ -304,7 +335,7 @@ HANDLER(setcursty)
 
 HANDLER(fixcursor)
     c->r = MIN(c->r, s->nline - 1);
-    c->c = MIN(c->c, s->ncol - 1);
+    c->c = MIN(c->c, s->ncol);
 }
 
 static bool
@@ -508,13 +539,13 @@ tmt_resize(TMT *vt, size_t nline, size_t ncol)
 
 #define UPDATE_FULLWIDTH() {\
 	TMTCHAR mc;	\
-	memcpy(&mc, &CLINE(vt)->chars[vt->curs.c], sizeof(TMTCHAR)); \
+	memcpy(&mc, &CLINE(vt)->chars[cur_col], sizeof(TMTCHAR)); \
 	mc.char_type = TMT_FULLWIDTH; \
 	if (c->c+1 >= s->ncol) { \
-		CLINE(vt)->chars[vt->curs.c].c = L' '; \
-		CLINE(vt)->chars[vt->curs.c].a = vt->attrs; \
-		CLINE(vt)->chars[vt->curs.c].char_type = TMT_HALFWIDTH; \
-		CLINE(vt)->chars[vt->curs.c].num_marks = 0; \
+		CLINE(vt)->chars[cur_col].c = L' '; \
+		CLINE(vt)->chars[cur_col].a = vt->attrs; \
+		CLINE(vt)->chars[cur_col].char_type = TMT_HALFWIDTH; \
+		CLINE(vt)->chars[cur_col].num_marks = 0; \
 		CLINE(vt)->dirty = vt->dirty = true; \
 		c->c = 0; \
 		c->r++; \
@@ -607,10 +638,12 @@ writecharatcurs(TMT *vt, tmt_wchar_t w)
     CLINE(vt)->chars[vt->curs.c].c = w;
     CLINE(vt)->chars[vt->curs.c].a = vt->attrs;
     CLINE(vt)->chars[vt->curs.c].char_type = new_char_type;
+    CLINE(vt)->chars[vt->curs.c].num_marks = 0;
 	if (full_width) {
 		CLINE(vt)->chars[vt->curs.c+1].c = L' ';
 		CLINE(vt)->chars[vt->curs.c+1].a = vt->attrs;
 		CLINE(vt)->chars[vt->curs.c+1].char_type = TMT_IGNORED;
+        CLINE(vt)->chars[vt->curs.c+1].num_marks = 0;
 	}
     CLINE(vt)->dirty = vt->dirty = true;
 
