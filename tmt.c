@@ -276,7 +276,6 @@ HANDLER(sgr)
                                               FGBG(TMT_COLOR_BLACK+vt->pars[i+2]);
                                           } else if (vt->pars[i+2] < 232) {
                                               int num = vt->pars[i+2] - 16;
-                                              int blu_idx = (num % 6);
                                               FGBIRED(num / 36);
                                               FGBIGRN((num % 36) / 6);
                                               FGBIBLU(num % 6);
