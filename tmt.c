@@ -33,7 +33,7 @@
 #include "wide_lookup.h"
 
 #define BUF_MAX 100
-#define PAR_MAX 8
+#define PAR_MAX 12
 #define TAB 8
 #define MAX(x, y) (((size_t)(x) > (size_t)(y)) ? (size_t)(x) : (size_t)(y))
 #define MIN(x, y) (((size_t)(x) < (size_t)(y)) ? (size_t)(x) : (size_t)(y))
@@ -268,6 +268,7 @@ HANDLER(sgr)
                                       FGBGRED(); 
                                       FGBGGRN(); 
                                       FGBGBLU(); 
+                                      i += 4;
                                       break;
                                   }
                                   case 5: {
@@ -286,11 +287,11 @@ HANDLER(sgr)
                                               FGBBLU(num * 10 + 8);
                                           }
                                       }
+                                      i += 2;
                                       break;
                                   }
                               }
                           }
-                          i = vt->npar;
                           break;
         case 39: case 49: FGBG(TMT_COLOR_DEFAULT);          break;
         case 90: case 100: FGBGB(TMT_COLOR_BRIGHT_BLACK);   break;
